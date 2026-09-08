@@ -8,16 +8,16 @@ El modelo se entrena desde cero sobre Fashion-MNIST utilizando PyTorch, se expor
 
 Las principales decisiones tomadas fueron:
 
-- utilizar una CNN compacta de **105.866 parámetros**;
-- mantener la partición oficial de Fashion-MNIST: 60.000 imágenes de entrenamiento y 10.000 de test;
-- utilizar el conjunto oficial de test únicamente para la evaluación final;
-- exportar el modelo con batch dinámico para poder reutilizar el mismo artefacto ONNX;
-- comparar batch sizes `1` y `32`;
-- comparar `1` y `4` hilos mediante `intra_op_num_threads`;
-- medir la primera inferencia por separado;
-- ejecutar **200 warm-ups** antes de las mediciones estables;
-- realizar **2.000 repeticiones por trial**;
-- repetir cada configuración durante **3 trials**.
+- Utilizar una CNN compacta de **105.866 parámetros**;
+- Mantener la partición oficial de Fashion-MNIST: 60.000 imágenes de entrenamiento y 10.000 de test;
+- Utilizar el conjunto oficial de test únicamente para la evaluación final;
+- Exportar el modelo con batch dinámico para poder reutilizar el mismo artefacto ONNX;
+- Comparar batch sizes `1` y `32`;
+- Comparar `1` y `4` hilos mediante `intra_op_num_threads`;
+- Medir la primera inferencia por separado;
+- Ejecutar **200 warm-ups** antes de las mediciones estables;
+- Realizar **2.000 repeticiones por trial**;
+- Repetir cada configuración durante **3 trials**.
 
 El benchmark mide únicamente la llamada `session.run()` con la entrada ya preparada en memoria, por lo que los resultados representan latencia de inferencia y no latencia end-to-end.
 
@@ -34,16 +34,16 @@ La diferencia entre la accuracy final de entrenamiento y test fue de aproximadam
 
 El modelo se exportó correctamente a ONNX con:
 
-- opset `20`;
-- entrada: `[batch_size, 1, 28, 28]`;
-- salida: `[batch_size, 10]`;
-- tamaño del artefacto: aproximadamente **0,4200 MiB**.
+- Opset `20`;
+- Entrada: `[batch_size, 1, 28, 28]`;
+- Salida: `[batch_size, 10]`;
+- Tamaño del artefacto: aproximadamente **0,4200 MiB**.
 
 La coherencia PyTorch ↔ ONNX Runtime se comprobó sobre un batch de 32 imágenes reales:
 
-- máxima diferencia absoluta entre logits: **0,0000019073**;
-- diferencia absoluta media: **0,0000004335**;
-- predicciones coincidentes: **32/32**.
+- Máxima diferencia absoluta entre logits: **0,0000019073**;
+- Diferencia absoluta media: **0,0000004335**;
+- Predicciones coincidentes: **32/32**.
 
 La validación mediante `numpy.testing.assert_allclose()` finalizó correctamente con `rtol=1e-4` y `atol=1e-5`.
 
@@ -108,15 +108,15 @@ El beneficio observado fue especialmente elevado con batch 32. Una hipótesis ra
 
 Con cuatro hilos:
 
-- batch 1: `0,0778 ms` y `12.986,57 img/s`;
-- batch 32: `0,3827 ms` y `83.851,26 img/s`.
+- Batch 1: `0,0778 ms` y `12.986,57 img/s`;
+- Batch 32: `0,3827 ms` y `83.851,26 img/s`.
 
 Batch 32 presenta aproximadamente **4,92 veces más latencia por llamada**, pero obtiene aproximadamente **6,46 veces más throughput**.
 
 Esto refleja el trade-off principal del benchmark:
 
-- batches pequeños favorecen la respuesta de entradas individuales;
-- batches mayores permiten procesar muchas más muestras por segundo.
+- Batches pequeños favorecen la respuesta de entradas individuales;
+- Batches mayores permiten procesar muchas más muestras por segundo.
 
 ### Variabilidad
 
@@ -132,15 +132,15 @@ Por este motivo se utilizan múltiples warm-ups, 2.000 repeticiones y tres trial
 
 Las principales limitaciones del benchmark son:
 
-- todas las mediciones se realizaron sobre una única CPU;
-- se utilizó Windows sin aislamiento específico de núcleos ni control de frecuencia;
-- únicamente se evaluaron batch sizes `1` y `32`;
-- únicamente se compararon `1` y `4` hilos;
-- la temporización mide inferencia aislada, no el pipeline completo;
-- la memoria RSS representa el proceso Python completo;
-- los trials se ejecutan dentro del mismo proceso;
-- no se realizaron cuantización, pruning, distillation ni optimizaciones adicionales;
-- la validación PyTorch ↔ ONNX se realizó sobre un batch de 32 imágenes y no sobre todo el conjunto de test.
+- Todas las mediciones se realizaron sobre una única CPU;
+- Se utilizó Windows sin aislamiento específico de núcleos ni control de frecuencia;
+- Únicamente se evaluaron batch sizes `1` y `32`;
+- Únicamente se compararon `1` y `4` hilos;
+- La temporización mide inferencia aislada, no el pipeline completo;
+- La memoria RSS representa el proceso Python completo;
+- Los trials se ejecutan dentro del mismo proceso;
+- No se realizaron cuantización, pruning, distillation ni optimizaciones adicionales;
+- La validación PyTorch ↔ ONNX se realizó sobre un batch de 32 imágenes y no sobre todo el conjunto de test.
 
 Los resultados deben interpretarse como una línea base del entorno evaluado y no como propiedades universales del modelo.
 
@@ -158,9 +158,9 @@ Para un escenario donde las entradas llegan individualmente y se prioriza el tie
 
 Resultados:
 
-- latencia media: **0,0778 ms**;
-- p95 medio: **0,1241 ms**;
-- throughput: **12.986,57 img/s**.
+- Latencia media: **0,0778 ms**;
+- P95 medio: **0,1241 ms**;
+- Throughput: **12.986,57 img/s**.
 
 ### Procesamiento por lotes
 
@@ -172,8 +172,8 @@ Para un escenario donde existen múltiples entradas disponibles y se prioriza th
 
 Resultados:
 
-- latencia media por llamada: **0,3827 ms**;
-- p95 medio: **0,4872 ms**;
-- throughput: **83.851,26 img/s**.
+- Latencia media por llamada: **0,3827 ms**;
+- P95 medio: **0,4872 ms**;
+- Throughput: **83.851,26 img/s**.
 
 Por tanto, no existe una única configuración óptima independientemente del caso de uso. La elección debe realizarse en función de si el sistema prioriza latencia individual o capacidad total de procesamiento, y debe validarse siempre sobre el hardware objetivo.

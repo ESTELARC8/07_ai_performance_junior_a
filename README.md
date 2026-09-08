@@ -336,12 +336,12 @@ Los resultados de rendimiento dependen del hardware y del estado del sistema.
 
 Para reducir la variabilidad:
 
-- la primera inferencia se mide por separado;
-- se utilizan 200 ejecuciones de warm-up;
-- se realizan 2.000 repeticiones por trial;
-- cada configuración se ejecuta tres veces;
-- las versiones de las dependencias quedan fijadas;
-- el entorno hardware/software queda registrado.
+- La primera inferencia se mide por separado;
+- Se utilizan 200 ejecuciones de warm-up;
+- Se realizan 2.000 repeticiones por trial;
+- Cada configuración se ejecuta tres veces;
+- Las versiones de las dependencias quedan fijadas;
+- El entorno hardware/software queda registrado.
 
 Las cifras presentadas deben interpretarse como resultados del entorno descrito y no como valores universales del modelo.
 

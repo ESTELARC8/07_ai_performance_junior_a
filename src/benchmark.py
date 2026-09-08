@@ -22,9 +22,11 @@ def load_config():
             f"No se ha encontrado la configuración: {CONFIG_PATH}"
         )
 
+    # Carga el archivo YAML y lo convierte en estructuras Python como diccionarios y listas.
     with open(CONFIG_PATH, "r", encoding="utf-8") as file:
         config = yaml.safe_load(file)
 
+    # Define los parámetros mínimos que debe tener la configuración para poder ejecutar el benchmark.
     required_fields = [
         "batch_sizes",
         "thread_counts",
@@ -33,6 +35,7 @@ def load_config():
         "repetitions",
     ]
 
+    # Comprueba que no falte ningún parámetro obligatorio.
     for field in required_fields:
         if field not in config:
             raise ValueError(
@@ -43,8 +46,10 @@ def load_config():
 
 
 def load_input_batch(batch_size):
+    # Convierte cada imagen a tensor float32 con valores en [0, 1].
     transform = transforms.ToTensor()
 
+    # Utiliza imágenes reales de la partición oficial de test como entrada del benchmark.
     test_dataset = datasets.FashionMNIST(
         root="data",
         train=False,
@@ -52,28 +57,38 @@ def load_input_batch(batch_size):
         transform=transform,
     )
 
+    # Evita intentar construir un batch mayor que el dataset disponible.
     if batch_size > len(test_dataset):
         raise ValueError(
             f"batch_size={batch_size} es mayor que el número "
             f"de muestras disponibles ({len(test_dataset)})."
         )
 
+    # Extrae las primeras batch_size imágenes y las convierte a NumPy.
+    # Cada imagen individual tiene forma [1, 28, 28].
     images = [
         test_dataset[index][0].numpy()
         for index in range(batch_size)
     ]
 
+    # Apila las imágenes creando un único array con forma: [batch_size, 1, 28, 28].
     batch = np.stack(images, axis=0)
 
+    # Garantiza que ONNX Runtime recibe entradas float32.
     return batch.astype(np.float32)
 
 
 def create_session(num_threads):
+    # Permite configurar explícitamente cómo ONNX Runtime utiliza la CPU.
     session_options = ort.SessionOptions()
 
+    # Número de hilos que ONNX Runtime puede utilizar para paralelizar el trabajo dentro de una operación.
     session_options.intra_op_num_threads = num_threads
+
+    # Mantiene fijo el paralelismo entre operaciones para que la variable comparada en el benchmark sea principalmente intra_op_num_threads.
     session_options.inter_op_num_threads = 1
 
+    # Crea la sesión forzando explícitamente la ejecución en CPU.
     session = ort.InferenceSession(
         ONNX_MODEL_PATH,
         sess_options=session_options,
@@ -89,11 +104,13 @@ def measure_latency(
     warmup_runs,
     repetitions,
 ):
+    # Asocia el nombre de entrada definido en el grafo ONNX con el batch que se utilizará para inferencia.
     input_feed = {
         "input": input_batch,
     }
 
     # Primera inferencia
+    # Se mide aparte porque puede tener costes iniciales diferentes al comportamiento estable posterior.
     start = time.perf_counter_ns()
 
     session.run(
@@ -103,9 +120,12 @@ def measure_latency(
 
     end = time.perf_counter_ns()
 
+    # perf_counter_ns devuelve nanosegundos.
+    # Dividir entre 1.000.000 para convertirlo a milisegundos.
     first_run_ms = (end - start) / 1_000_000
 
     # Warm-up
+    # Estas inferencias se ejecutan pero no forman parte de las estadísticas.
     for _ in range(warmup_runs):
         session.run(
             ["logits"],
@@ -115,6 +135,7 @@ def measure_latency(
     # Régimen estable
     latencies_ms = []
 
+    # Mide individualmente cada inferencia una vez terminado el warm-up.
     for _ in range(repetitions):
         start = time.perf_counter_ns()
 
@@ -129,18 +150,23 @@ def measure_latency(
 
         latencies_ms.append(latency_ms)
 
+    # Devuelve por separado la primera inferencia y la distribución de latencias del régimen estable.
     return first_run_ms, np.array(latencies_ms)
 
 
 def get_process_memory_mb():
+    # Obtiene información del proceso Python que está ejecutando el benchmark.
     process = psutil.Process()
 
+    # RSS representa la memoria RAM residente utilizada por el proceso.
     memory_bytes = process.memory_info().rss
 
+    # Convierte bytes a MiB.
     return memory_bytes / (1024 * 1024)
 
 
 def get_model_size_mb():
+    # Obtiene el tamaño físico del archivo ONNX almacenado en disco.
     model_size_bytes = ONNX_MODEL_PATH.stat().st_size
 
     return model_size_bytes / (1024 * 1024)
@@ -153,8 +179,10 @@ def run_benchmark(
     repetitions,
     trial,
 ):
+    # Prepara el batch antes de comenzar la medición para que la carga y el preprocesado de datos no formen parte de la latencia de inferencia.
     input_batch = load_input_batch(batch_size)
 
+    # Crea una sesión nueva para esta configuración de hilos.
     session = create_session(num_threads)
 
     first_run_ms, latencies_ms = measure_latency(
@@ -164,18 +192,22 @@ def run_benchmark(
         repetitions=repetitions,
     )
 
+    # Calcula distintas estadísticas porque la media por sí sola no describe completamente la distribución de latencias.
     mean_ms = float(np.mean(latencies_ms))
     median_ms = float(np.median(latencies_ms))
     p95_ms = float(np.percentile(latencies_ms, 95))
 
+    # Convierte la latencia media de milisegundos a segundos y calcula cuántas imágenes pueden procesarse teóricamente por segundo.
     throughput = (
         batch_size
         / (mean_ms / 1000.0)
     )
 
+    # Estas medidas se realizan fuera de la región temporizada, por lo que no contaminan la latencia de session.run().
     memory_rss_mb = get_process_memory_mb()
     model_size_mb = get_model_size_mb()
 
+    # Devuelve todas las métricas de este trial en una estructura fácil de almacenar posteriormente como CSV.
     return {
         "batch_size": batch_size,
         "threads": num_threads,
@@ -195,6 +227,7 @@ def run_benchmark(
 def build_summary(results):
     summary = []
 
+    # Obtiene todas las combinaciones únicas de batch size y número de hilos que aparecen en los resultados.
     configurations = sorted(
         {
             (result["batch_size"], result["threads"])
@@ -203,6 +236,7 @@ def build_summary(results):
     )
 
     for batch_size, threads in configurations:
+        # Selecciona únicamente los trials pertenecientes a la configuración actual.
         config_results = [
             result
             for result in results
@@ -210,6 +244,7 @@ def build_summary(results):
             and result["threads"] == threads
         ]
 
+        # Agrupa la misma métrica de todos los trials para poder calcular posteriormente estadísticas entre ejecuciones.
         first_runs = np.array(
             [result["first_run_ms"] for result in config_results]
         )
@@ -237,22 +272,37 @@ def build_summary(results):
             [result["memory_rss_mb"] for result in config_results]
         )
 
+        # Resume los distintos trials de una misma configuración en una única fila.
         summary.append(
             {
                 "batch_size": batch_size,
                 "threads": threads,
                 "trials": len(config_results),
+
+                # Media del first run obtenido en los distintos trials.
                 "first_run_mean_ms": float(np.mean(first_runs)),
+
+                # Media de las latencias medias de los distintos trials.
                 "latency_mean_ms": float(np.mean(means)),
+
+                # Desviación estándar de las latencias medias entre trials: da una idea de cuánto varían unas ejecuciones respecto a otras.
                 "latency_mean_std_ms": float(np.std(means)),
+
+                # Promedio de las medianas obtenidas en los trials.
                 "median_mean_ms": float(np.mean(medians)),
+
+                # Promedio de los p95 obtenidos en los trials.
                 "p95_mean_ms": float(np.mean(p95_values)),
+
                 "throughput_mean_images_s": float(
                     np.mean(throughputs)
                 ),
+
                 "memory_rss_mean_mb": float(
                     np.mean(memory_values)
                 ),
+
+                # El tamaño del mismo modelo no cambia entre trials, por lo que basta con tomar el valor del primero.
                 "model_size_mb": config_results[0]["model_size_mb"],
             }
         )
@@ -261,6 +311,7 @@ def build_summary(results):
 
 
 def save_csv(path, rows):
+    # Crea la carpeta de destino si todavía no existe.
     path.parent.mkdir(
         parents=True,
         exist_ok=True,
@@ -272,6 +323,7 @@ def save_csv(path, rows):
         newline="",
         encoding="utf-8",
     ) as file:
+        # Utiliza las claves del primer diccionario como columnas del CSV.
         writer = csv.DictWriter(
             file,
             fieldnames=rows[0].keys(),
@@ -289,12 +341,14 @@ def main():
 
     config = load_config()
 
+    # Extrae los parámetros experimentales del archivo YAML.
     batch_sizes = config["batch_sizes"]
     thread_counts = config["thread_counts"]
     trials = config["trials"]
     warmup_runs = config["warmup_runs"]
     repetitions = config["repetitions"]
 
+    # Valida la configuración antes de empezar una ejecución potencialmente larga.
     if not batch_sizes:
         raise ValueError("batch_sizes no puede estar vacío.")
 
@@ -331,6 +385,7 @@ def main():
 
     results = []
 
+    # Recorre todas las combinaciones: batch size × número de hilos × número de trial.
     for batch_size in batch_sizes:
         for num_threads in thread_counts:
             for trial in range(1, trials + 1):
@@ -351,6 +406,7 @@ def main():
                     trial=trial,
                 )
 
+                # Guarda el resultado individual para generar después tanto el CSV de trials como el resumen agregado.
                 results.append(result)
 
                 print(
@@ -388,8 +444,10 @@ def main():
                     f"{result['model_size_mb']:.4f} MB"
                 )
 
+    # Agrupa los trials correspondientes a cada configuración.
     summary = build_summary(results)
 
+    # Guarda por separado los resultados individuales y el resumen agregado.
     save_csv(
         TRIALS_RESULTS_PATH,
         results,
