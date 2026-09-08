@@ -1,0 +1,31 @@
+{
+    "system": {
+        "os": "Windows",
+        "os_version": "10.0.26200",
+        "platform": "Windows-10-10.0.26200-SP0",
+        "processor": "Intel64 Family 6 Model 126 Stepping 5, GenuineIntel",
+        "machine": "AMD64"
+    },
+    "cpu": {
+        "physical_cores": 4,
+        "logical_cores": 8
+    },
+    "memory": {
+        "total_ram_gb": 7.79
+    },
+    "software": {
+        "python": "3.11.15",
+        "pytorch": "2.14.0+cpu",
+        "torchvision": "0.29.0+cpu",
+        "onnx": "1.22.0",
+        "onnxruntime": "1.29.0",
+        "numpy": "2.4.6"
+    },
+    "onnxruntime": {
+        "available_providers": [
+            "AzureExecutionProvider",
+            "CPUExecutionProvider"
+        ],
+        "benchmark_provider": "CPUExecutionProvider"
+    }
+}
